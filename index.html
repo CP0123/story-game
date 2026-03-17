@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>圖書館故事接龍</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+
+</head>
+
+<body>
+
+<h2>📚 圖書館故事接龍</h2>
+
+<div id="last"></div>
+
+<br>
+
+<textarea id="text" placeholder="寫下下一句"></textarea>
+
+<br><br>
+
+<button onclick="lock()">開始填寫</button>
+<button onclick="submit()">送出</button>
+
+<p id="timer"></p>
+
+<script>
+
+const supabase = supabase.createClient(
+"你的SupabaseURL",
+"你的anon key"
+)
+
+let countdown
+
+async function load(){
+
+const { data } = await supabase
+.from('story')
+.select('*')
+.order('id', {ascending:false})
+.limit(1)
+
+document.getElementById("last").innerHTML=
+"上一句："+data[0].text
+
+}
+
+async function lock(){
+
+const { data } = await supabase
+.from("system")
+.select("*")
+.eq("id",1)
+
+let sys=data[0]
+
+let now=Date.now()
+
+if(sys.lock && now-sys.lock_time<60000){
+alert("目前有人正在寫")
+return
+}
+
+await supabase
+.from("system")
+.update({lock:true,lock_time:now})
+.eq("id",1)
+
+startTimer()
+
+}
+
+function startTimer(){
+
+let sec=60
+
+countdown=setInterval(()=>{
+
+sec--
+
+document.getElementById("timer").innerText="剩餘 "+sec+" 秒"
+
+if(sec==0){
+clearInterval(countdown)
+}
+
+},1000)
+
+}
+
+async function submit(){
+
+const text=document.getElementById("text").value
+
+const { data } = await supabase
+.from("story")
+.insert([{text:text}])
+.select()
+
+await supabase
+.from("system")
+.update({lock:false})
+.eq("id",1)
+
+clearInterval(countdown)
+
+alert("你完成第 "+data[0].id+" 句\n\n"+text+"\n\n請截圖參加抽獎")
+
+}
+
+load()
+
+</script>
+
+</body>
+</html>
