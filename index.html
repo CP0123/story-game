@@ -28,8 +28,8 @@
 <script>
 
 const supabase = supabase.createClient(
-"你的SupabaseURL",
-"你的anon key"
+"https://ybjftewefpdvyrsxwgvn.supabase.co",
+"sb_publishable_wtZko7YvOEy6tcz2zl9qoQ_0hgoJZqG"
 )
 
 let countdown
@@ -56,7 +56,7 @@ const { data } = await supabase
 
 let sys=data[0]
 
-let now=Date.now()
+let now = new Date().toISOString()
 
 if(sys.lock && now-sys.lock_time<60000){
 alert("目前有人正在寫")
