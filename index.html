@@ -3,116 +3,139 @@
 <head>
 <meta charset="UTF-8">
 <title>圖書館故事接龍</title>
-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-
+<style>
+body { font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; background: #fdf6e3; }
+h2 { color: #6b4f4f; }
+textarea { width: 100%; height: 80px; font-size: 16px; }
+button { margin-top: 10px; font-size: 16px; padding: 8px 16px; }
+#last { margin-bottom: 10px; padding: 10px; background: #fffbe6; border-left: 4px solid #ffb347; }
+#timer { font-weight: bold; margin-top: 10px; }
+</style>
 </head>
-
 <body>
 
 <h2>📚 圖書館故事接龍</h2>
 
-<div id="last"></div>
-
-<br>
+<div id="last">讀取中...</div>
 
 <textarea id="text" placeholder="寫下下一句"></textarea>
 
-<br><br>
+<br>
 
 <button onclick="lock()">開始填寫</button>
-<button onclick="submit()">送出</button>
+<button onclick="submitStory()">送出</button>
 
 <p id="timer"></p>
 
 <script>
-
+// ---------- Supabase 初始化 ----------
 const supabase = supabase.createClient(
-"https://ybjftewefpdvyrsxwgvn.supabase.co",
-"sb_publishable_wtZko7YvOEy6tcz2zl9qoQ_0hgoJZqG"
+  "https://ybjftewefpdvyrsxwgvn.supabase.co", // <-- 替換成你的 Project URL
+  "sb_publishable_wtZko7YvOEy6tcz2zl9qoQ_0hgoJZqG"                        // <-- 替換成你的 anon key
 )
 
-let countdown
+let countdown;
 
-async function load(){
+// ---------- 載入最新故事 ----------
+async function loadStory() {
+  const { data, error } = await supabase
+    .from('story')
+    .select('*')
+    .order('id', { ascending: false })
+    .limit(1)
 
-const { data } = await supabase
-.from('story')
-.select('*')
-.order('id', {ascending:false})
-.limit(1)
+  if (error) {
+    document.getElementById("last").innerText = "載入故事失敗"
+    return
+  }
 
-document.getElementById("last").innerHTML=
-"上一句："+data[0].text
-
+  if (data.length > 0) {
+    document.getElementById("last").innerHTML = "上一句："+data[0].text
+  } else {
+    document.getElementById("last").innerHTML = "目前還沒有故事，請寫下第一句！"
+  }
 }
 
-async function lock(){
+// ---------- 鎖定使用者 ----------
+async function lock() {
+  const { data, error } = await supabase
+    .from("system")
+    .select("*")
+    .eq("id", 1)
 
-const { data } = await supabase
-.from("system")
-.select("*")
-.eq("id",1)
+  if (error || data.length === 0) {
+    alert("系統錯誤")
+    return
+  }
 
-let sys=data[0]
+  let sys = data[0]
+  let now = new Date()
+  let lockTime = sys.lock_time ? new Date(sys.lock_time) : null
 
-let now = new Date().toISOString()
+  if(sys.lock && lockTime && (now - lockTime < 60000)) {
+    alert("目前有人正在寫，請稍後再試")
+    return
+  }
 
-if(sys.lock && now-sys.lock_time<60000){
-alert("目前有人正在寫")
-return
+  // 設定鎖定
+  await supabase
+    .from("system")
+    .update({ lock:true, lock_time: now.toISOString() })
+    .eq("id",1)
+
+  startTimer()
+  alert("鎖定成功！請在60秒內完成")
 }
 
-await supabase
-.from("system")
-.update({lock:true,lock_time:now})
-.eq("id",1)
+// ---------- 倒數計時 ----------
+function startTimer() {
+  let sec = 60
+  countdown = setInterval(async ()=>{
+    sec--
+    document.getElementById("timer").innerText = "剩餘 "+sec+" 秒"
 
-startTimer()
-
+    if(sec <= 0){
+      clearInterval(countdown)
+      document.getElementById("timer").innerText = "時間到，鎖已解除"
+      await supabase.from("system").update({lock:false}).eq("id",1)
+    }
+  },1000)
 }
 
-function startTimer(){
+// ---------- 送出故事 ----------
+async function submitStory() {
+  const text = document.getElementById("text").value.trim()
+  if(!text){
+    alert("請先輸入文字")
+    return
+  }
 
-let sec=60
+  // 新增故事
+  const { data, error } = await supabase
+    .from("story")
+    .insert([{ text: text }])
+    .select()
 
-countdown=setInterval(()=>{
+  if(error){
+    alert("送出失敗")
+    return
+  }
 
-sec--
+  // 解除鎖
+  await supabase.from("system").update({lock:false}).eq("id",1)
+  clearInterval(countdown)
 
-document.getElementById("timer").innerText="剩餘 "+sec+" 秒"
+  alert("你完成第 "+data[0].id+" 句\n\n「"+text+"」\n\n請截圖參加抽獎！")
 
-if(sec==0){
-clearInterval(countdown)
+  // 清空輸入框並更新最新故事
+  document.getElementById("text").value = ""
+  loadStory()
 }
 
-},1000)
-
-}
-
-async function submit(){
-
-const text=document.getElementById("text").value
-
-const { data } = await supabase
-.from("story")
-.insert([{text:text}])
-.select()
-
-await supabase
-.from("system")
-.update({lock:false})
-.eq("id",1)
-
-clearInterval(countdown)
-
-alert("你完成第 "+data[0].id+" 句\n\n"+text+"\n\n請截圖參加抽獎")
-
-}
-
-load()
+// ---------- 初始載入 ----------
+loadStory()
 
 </script>
-
 </body>
 </html>
